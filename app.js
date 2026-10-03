@@ -48,7 +48,20 @@ input.addEventListener('input',()=>{input.style.height='auto';input.style.height
 function addMessage(text,kind){const el=document.createElement('div');el.className=`message ${kind}`;const label=document.createElement('span');label.className='message-label';label.textContent=kind==='user'?'ВЫ':'JARVIS';el.append(label,document.createTextNode(text));conversation.append(el);conversation.scrollTop=conversation.scrollHeight;return el}
 function readHistory(){try{return JSON.parse(localStorage.getItem('jarvis.chatHistory')||'[]')}catch{return[]}}
 function saveHistory(text){const history=readHistory();history.unshift(text);localStorage.setItem('jarvis.chatHistory',JSON.stringify(history.slice(0,20)))}
-form.addEventListener('submit',e=>{e.preventDefault();const text=input.value.trim();if(!text)return;saveHistory(text);welcome.hidden=true;addMessage(text,'user');input.value='';input.style.height='auto';document.getElementById('historyPopover').hidden=true;const typing=document.createElement('div');typing.className='message assistant';typing.innerHTML='<span class="message-label">JARVIS</span><span class="typing-dots"><i></i><i></i><i></i></span>';conversation.append(typing);conversation.scrollTop=conversation.scrollHeight;window.setTimeout(()=>{typing.remove();addMessage('Я на связи! Расскажи немного подробнее, и я постараюсь помочь.','assistant')},850)});
+let chatMessages=[],apiKeyConfigured=false;
+async function submitPrompt(value=input.value){
+  const text=value.trim();if(!text)return;
+  if(!window.jarvisWindow){addMessage('Запустите Jarvis Pro как приложение, чтобы подключиться к OpenRouter.','assistant');return}
+  saveHistory(text);welcome.hidden=true;addMessage(text,'user');input.value='';input.style.height='auto';document.getElementById('historyPopover').hidden=true;
+  chatMessages.push({role:'user',content:text});
+  const typing=document.createElement('div');typing.className='message assistant';typing.innerHTML='<span class="message-label">JARVIS</span><span class="typing-dots"><i></i><i></i><i></i></span>';conversation.append(typing);conversation.scrollTop=conversation.scrollHeight;
+  try{
+    const systemText=codeMode?'Ты Jarvis, полезный ИИ-помощник. Отвечай по-русски. В режиме кода давай точные решения, код в Markdown и кратко объясняй важные детали.':'Ты Jarvis, личный ИИ-помощник. Отвечай ясно и по-русски.';
+    const messages=[{role:'system',content:systemText},...chatMessages.slice(-24)];
+    const answer=await window.jarvisWindow.sendMessage(messages);typing.remove();chatMessages.push({role:'assistant',content:answer});addMessage(answer,'assistant');
+  }catch(error){typing.remove();addMessage(error.message||'Не удалось связаться с OpenRouter.','assistant');if(/api-ключ/i.test(error.message))openSettings()}
+}
+form.addEventListener('submit',e=>{e.preventDefault();submitPrompt()});
 const modeButton=document.getElementById('modeButton'),modeMenu=document.getElementById('modeMenu');
 modeButton.addEventListener('click',()=>{modeMenu.hidden=!modeMenu.hidden;modeButton.classList.toggle('open',!modeMenu.hidden)});
 modeMenu.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>{document.getElementById('modeLabel').textContent=button.dataset.mode;modeMenu.hidden=true;modeButton.classList.remove('open')}));
@@ -58,8 +71,55 @@ historyButton.addEventListener('click',()=>{historyPopover.hidden=!historyPopove
 document.addEventListener('click',e=>{if(!e.target.closest('.history-popover')&&!e.target.closest('#historyButton'))historyPopover.hidden=true});
 const codeButton=document.getElementById('codeButton');let codeMode=false;
 codeButton.addEventListener('click',()=>{codeMode=!codeMode;codeButton.classList.toggle('active',codeMode);codeButton.setAttribute('aria-pressed',String(codeMode));document.getElementById('modeLabel').textContent=codeMode?'Режим кода':'Личный помощник';input.placeholder=codeMode?'Опишите задачу по коду…':'Чем могу помочь сегодня?'});
-const mic=document.getElementById('mic');mic.addEventListener('click',()=>{const active=mic.classList.toggle('listening');mic.title=active?'Остановить голосовой ввод':'Голосовой ввод';if(active&&('webkitSpeechRecognition'in window||'SpeechRecognition'in window)){const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition,recognition=new Recognition();recognition.lang='ru-RU';recognition.onresult=event=>{input.value+=(input.value?' ':'')+event.results[0][0].transcript;input.dispatchEvent(new Event('input'))};recognition.onend=()=>{mic.classList.remove('listening');mic.title='Голосовой ввод';voiceMode.classList.remove('active');voiceMode.setAttribute('aria-pressed','false')};recognition.onerror=recognition.onend;recognition.start()}else if(active){window.setTimeout(()=>{mic.classList.remove('listening');mic.title='Голосовой ввод';voiceMode.classList.remove('active');voiceMode.setAttribute('aria-pressed','false')},1300)}});
-const voiceMode=document.getElementById('voiceMode');voiceMode.addEventListener('click',()=>{const active=voiceMode.classList.toggle('active');voiceMode.setAttribute('aria-pressed',String(active));voiceMode.title=active?'Остановить голосовой режим':'Голосовой режим';if(active){if(!mic.classList.contains('listening'))mic.click()}else if(mic.classList.contains('listening'))mic.click()});
+const mic=document.getElementById('mic'),voiceMode=document.getElementById('voiceMode');
+let recorder=null,recordStream=null,recordChunks=[],recordingPurpose='dictation',recordingTimer=null;
+function setRecordingState(active){mic.classList.toggle('listening',active);mic.title=active?'Остановить запись':'Голосовой ввод';voiceMode.classList.toggle('active',active&&recordingPurpose==='send');voiceMode.setAttribute('aria-pressed',String(active&&recordingPurpose==='send'))}
+function bytesToBase64(buffer){let binary='';const bytes=new Uint8Array(buffer);for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary)}
+async function beginRecording(purpose){
+  if(!window.jarvisWindow)return addMessage('Голосовой ввод доступен в установленном приложении.','assistant');
+  try{
+    if(!apiKeyConfigured){openSettings();throw new Error('Добавьте API-ключ OpenRouter, чтобы распознавать речь.')}
+    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw new Error('Запись аудио недоступна. Проверьте разрешение микрофона Windows.');
+    recordStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    const preferred='audio/webm;codecs=opus',mimeType=MediaRecorder.isTypeSupported(preferred)?preferred:'audio/webm';
+    recorder=new MediaRecorder(recordStream,{mimeType});recordChunks=[];recordingPurpose=purpose;
+    recorder.ondataavailable=event=>{if(event.data.size)recordChunks.push(event.data)};
+    recorder.onerror=()=>{setRecordingState(false);addMessage('Ошибка записи. Проверьте подключение микрофона.','assistant')};
+    recorder.onstop=async()=>{
+      clearTimeout(recordingTimer);recordStream?.getTracks().forEach(track=>track.stop());recordStream=null;setRecordingState(false);
+      const chunks=recordChunks;recordChunks=[];recorder=null;
+      if(!chunks.length)return;
+      addMessage('Распознаю речь…','assistant');
+      try{
+        const blob=new Blob(chunks,{type:mimeType}),data=bytesToBase64(await blob.arrayBuffer());
+        const transcript=await window.jarvisWindow.transcribeAudio(data,'webm');
+        if(purpose==='send'){input.value=transcript;input.dispatchEvent(new Event('input'));await submitPrompt(transcript)}
+        else{input.value+=(input.value?' ':'')+transcript;input.dispatchEvent(new Event('input'));input.focus()}
+      }catch(error){addMessage(error.message||'Не удалось распознать запись.','assistant')}
+    };
+    recorder.start();setRecordingState(true);recordingTimer=setTimeout(()=>{if(recorder?.state==='recording')recorder.stop()},30000);
+  }catch(error){recordStream?.getTracks().forEach(track=>track.stop());recordStream=null;setRecordingState(false);addMessage(error.message||'Не удалось запустить микрофон.','assistant')}
+}
+function stopRecording(){if(recorder?.state==='recording')recorder.stop()}
+mic.addEventListener('click',()=>recorder?.state==='recording'?stopRecording():beginRecording('dictation'));
+voiceMode.addEventListener('click',()=>recorder?.state==='recording'?stopRecording():beginRecording('send'));
+
+const settingsOverlay=document.getElementById('settingsOverlay'),settingsButton=document.getElementById('settingsButton'),apiKeyInput=document.getElementById('apiKeyInput'),modelInput=document.getElementById('modelInput'),transcriptionModelInput=document.getElementById('transcriptionModelInput'),keyStatus=document.getElementById('keyStatus'),settingsFeedback=document.getElementById('settingsFeedback');
+async function openSettings(){settingsOverlay.hidden=false;settingsFeedback.textContent='';apiKeyInput.value='';try{const settings=await window.jarvisWindow.getSettings();apiKeyConfigured=settings.apiKeyConfigured;modelInput.value=settings.model;transcriptionModelInput.value=settings.transcriptionModel;keyStatus.textContent=apiKeyConfigured?'Ключ сохранён на этом компьютере':'Ключ ещё не добавлен'}catch(error){settingsFeedback.textContent=error.message}}
+settingsButton.addEventListener('click',openSettings);
+document.getElementById('settingsClose').addEventListener('click',()=>{settingsOverlay.hidden=true});
+settingsOverlay.addEventListener('click',event=>{if(event.target===settingsOverlay)settingsOverlay.hidden=true});
+document.getElementById('getApiKey').addEventListener('click',event=>{event.preventDefault();window.jarvisWindow?.openApiKeyPage()});
+document.getElementById('saveSettings').addEventListener('click',async()=>{
+  settingsFeedback.textContent='Сохраняю…';
+  try{const result=await window.jarvisWindow.saveSettings({apiKey:apiKeyInput.value,model:modelInput.value,transcriptionModel:transcriptionModelInput.value});apiKeyConfigured=result.apiKeyConfigured;apiKeyInput.value='';keyStatus.textContent=apiKeyConfigured?'Ключ сохранён на этом компьютере':'Ключ ещё не добавлен';settingsFeedback.textContent='Сохранено'}catch(error){settingsFeedback.textContent=error.message}
+});
+document.getElementById('removeApiKey').addEventListener('click',async()=>{
+  settingsFeedback.textContent='';
+  try{const result=await window.jarvisWindow.saveSettings({clearApiKey:true,model:modelInput.value,transcriptionModel:transcriptionModelInput.value});apiKeyConfigured=result.apiKeyConfigured;apiKeyInput.value='';keyStatus.textContent='Ключ удалён';settingsFeedback.textContent=''}catch(error){settingsFeedback.textContent=error.message}
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')settingsOverlay.hidden=true});
+window.jarvisWindow?.getSettings().then(settings=>{apiKeyConfigured=settings.apiKeyConfigured}).catch(()=>{});
 const app=document.getElementById('appWindow');
 document.getElementById('minimize').addEventListener('click',()=>{if(window.jarvisWindow)window.jarvisWindow.minimize();else{app.classList.add('minimized');window.setTimeout(()=>app.classList.remove('minimized'),900)}});
 const overlay=document.getElementById('closeOverlay');
