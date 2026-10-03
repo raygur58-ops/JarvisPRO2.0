@@ -1,0 +1,50 @@
+{
+  "name": "jarvis-pro-sergio",
+  "version": "1.0.1",
+  "description": "Jarvis Pro desktop assistant interface by Sergio",
+  "main": "main.js",
+  "author": "Sergio",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.sergio.jarvispro",
+    "productName": "Jarvis Pro by Sergio",
+    "directories": {
+      "output": "release"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "raygur58-ops",
+        "repo": "JarvisPRO2.0",
+        "releaseType": "release"
+      }
+    ],
+    "files": [
+      "index.html",
+      "style.css",
+      "app.js",
+      "main.js",
+      "preload.js"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}
