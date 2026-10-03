@@ -104,19 +104,19 @@ function stopRecording(){if(recorder?.state==='recording')recorder.stop()}
 mic.addEventListener('click',()=>recorder?.state==='recording'?stopRecording():beginRecording('dictation'));
 voiceMode.addEventListener('click',()=>recorder?.state==='recording'?stopRecording():beginRecording('send'));
 
-const settingsOverlay=document.getElementById('settingsOverlay'),settingsButton=document.getElementById('settingsButton'),apiKeyInput=document.getElementById('apiKeyInput'),apiBaseUrlInput=document.getElementById('apiBaseUrlInput'),modelInput=document.getElementById('modelInput'),transcriptionModelInput=document.getElementById('transcriptionModelInput'),keyStatus=document.getElementById('keyStatus'),settingsFeedback=document.getElementById('settingsFeedback');
-async function openSettings(){settingsOverlay.hidden=false;settingsFeedback.textContent='';apiKeyInput.value='';try{const settings=await window.jarvisWindow.getSettings();apiKeyConfigured=settings.apiKeyConfigured;apiBaseUrlInput.value=settings.apiBaseUrl;modelInput.value=settings.model;transcriptionModelInput.value=settings.transcriptionModel;keyStatus.textContent=apiKeyConfigured?'Ключ сохранён на этом компьютере':'Ключ ещё не добавлен'}catch(error){settingsFeedback.textContent=error.message}}
+const settingsOverlay=document.getElementById('settingsOverlay'),settingsButton=document.getElementById('settingsButton'),apiKeyInput=document.getElementById('apiKeyInput'),apiBaseUrlInput=document.getElementById('apiBaseUrlInput'),modelInput=document.getElementById('modelInput'),keyStatus=document.getElementById('keyStatus'),settingsFeedback=document.getElementById('settingsFeedback');
+async function openSettings(){settingsOverlay.hidden=false;settingsFeedback.textContent='';apiKeyInput.value='';try{const settings=await window.jarvisWindow.getSettings();apiKeyConfigured=settings.apiKeyConfigured;apiBaseUrlInput.value=settings.apiBaseUrl;modelInput.value=settings.model;keyStatus.textContent=apiKeyConfigured?'Ключ сохранён на этом компьютере':'Ключ ещё не добавлен'}catch(error){settingsFeedback.textContent=error.message}}
 settingsButton.addEventListener('click',openSettings);
 document.getElementById('settingsClose').addEventListener('click',()=>{settingsOverlay.hidden=true});
 settingsOverlay.addEventListener('click',event=>{if(event.target===settingsOverlay)settingsOverlay.hidden=true});
 document.getElementById('getApiKey').addEventListener('click',event=>{event.preventDefault();window.jarvisWindow?.openApiKeyPage()});
 document.getElementById('saveSettings').addEventListener('click',async()=>{
   settingsFeedback.textContent='Сохраняю…';
-  try{const result=await window.jarvisWindow.saveSettings({apiKey:apiKeyInput.value,apiBaseUrl:apiBaseUrlInput.value,model:modelInput.value,transcriptionModel:transcriptionModelInput.value});apiKeyConfigured=result.apiKeyConfigured;apiKeyInput.value='';keyStatus.textContent=apiKeyConfigured?'Ключ сохранён на этом компьютере':'Ключ ещё не добавлен';settingsFeedback.textContent='Сохранено'}catch(error){settingsFeedback.textContent=error.message}
+  try{const result=await window.jarvisWindow.saveSettings({apiKey:apiKeyInput.value,apiBaseUrl:apiBaseUrlInput.value,model:modelInput.value});apiKeyConfigured=result.apiKeyConfigured;apiKeyInput.value='';keyStatus.textContent=apiKeyConfigured?'Ключ сохранён на этом компьютере':'Ключ ещё не добавлен';settingsFeedback.textContent='Сохранено'}catch(error){settingsFeedback.textContent=error.message}
 });
 document.getElementById('removeApiKey').addEventListener('click',async()=>{
   settingsFeedback.textContent='';
-  try{const result=await window.jarvisWindow.saveSettings({clearApiKey:true,apiBaseUrl:apiBaseUrlInput.value,model:modelInput.value,transcriptionModel:transcriptionModelInput.value});apiKeyConfigured=result.apiKeyConfigured;apiKeyInput.value='';keyStatus.textContent='Ключ удалён';settingsFeedback.textContent=''}catch(error){settingsFeedback.textContent=error.message}
+  try{const result=await window.jarvisWindow.saveSettings({clearApiKey:true,apiBaseUrl:apiBaseUrlInput.value,model:modelInput.value});apiKeyConfigured=result.apiKeyConfigured;apiKeyInput.value='';keyStatus.textContent='Ключ удалён';settingsFeedback.textContent=''}catch(error){settingsFeedback.textContent=error.message}
 });
 document.addEventListener('keydown',event=>{if(event.key==='Escape')settingsOverlay.hidden=true});
 window.jarvisWindow?.getSettings().then(settings=>{apiKeyConfigured=settings.apiKeyConfigured}).catch(()=>{});

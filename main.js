@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const { autoUpdater } = require('electron-updater');
 
 const DEFAULT_MODEL = 'openrouter/auto';
+const DEFAULT_TRANSCRIPTION_MODEL = 'openai/whisper-1';
 const DEFAULT_API_BASE_URL = 'https://openrouter.ai/api/v1';
 const SETTINGS_FILE = 'settings.json';
 
@@ -30,8 +31,7 @@ function readSettings() {
   return {
     apiKey,
     apiBaseUrl: (() => { try { return normalizeApiBaseUrl(stored.apiBaseUrl || DEFAULT_API_BASE_URL); } catch { return DEFAULT_API_BASE_URL; } })(),
-    model: typeof stored.model === 'string' ? stored.model : DEFAULT_MODEL,
-    transcriptionModel: typeof stored.transcriptionModel === 'string' ? stored.transcriptionModel : 'openai/whisper-1'
+    model: typeof stored.model === 'string' ? stored.model : DEFAULT_MODEL
   };
 }
 
@@ -128,17 +128,15 @@ app.whenReady().then(() => {
   ipcMain.handle('settings:get', event => {
     assertTrustedSender(event);
     const settings = readSettings();
-    return { apiKeyConfigured: Boolean(settings.apiKey), apiBaseUrl: settings.apiBaseUrl, model: settings.model, transcriptionModel: settings.transcriptionModel };
+    return { apiKeyConfigured: Boolean(settings.apiKey), apiBaseUrl: settings.apiBaseUrl, model: settings.model };
   });
 
   ipcMain.handle('settings:save', (event, values = {}) => {
     assertTrustedSender(event);
     const current = readSettings();
     const model = String(values.model || DEFAULT_MODEL).trim();
-    const transcriptionModel = String(values.transcriptionModel || 'openai/whisper-1').trim();
     const apiBaseUrl = normalizeApiBaseUrl(values.apiBaseUrl || DEFAULT_API_BASE_URL);
     if (!/^[\w.-]+\/[\w.:+-]+$/.test(model)) throw new Error('Укажите модель в формате provider/model.');
-    if (!/^[\w.-]+\/[\w.:+-]+$/.test(transcriptionModel)) throw new Error('Неверное название модели распознавания.');
     let encryptedApiKey = '';
     if (values.clearApiKey) {
       encryptedApiKey = '';
@@ -149,8 +147,8 @@ app.whenReady().then(() => {
       const previous = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
       encryptedApiKey = previous.encryptedApiKey;
     }
-    writeSettings({ encryptedApiKey, apiBaseUrl, model, transcriptionModel });
-    return { apiKeyConfigured: Boolean(encryptedApiKey), apiBaseUrl, model, transcriptionModel };
+    writeSettings({ encryptedApiKey, apiBaseUrl, model });
+    return { apiKeyConfigured: Boolean(encryptedApiKey), apiBaseUrl, model };
   });
 
   ipcMain.handle('ai:chat', async (event, values = {}) => {
@@ -184,7 +182,7 @@ app.whenReady().then(() => {
     if (!['wav', 'mp3', 'flac', 'm4a', 'ogg', 'webm', 'aac'].includes(format)) throw new Error('Неизвестный формат аудио.');
     const settings = readSettings();
     const result = await openRouterRequest('audio/transcriptions', {
-      model: settings.transcriptionModel,
+      model: DEFAULT_TRANSCRIPTION_MODEL,
       input_audio: { data, format },
       language: 'ru'
     });
