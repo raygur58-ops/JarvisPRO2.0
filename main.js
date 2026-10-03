@@ -4,10 +4,20 @@ const fs = require('node:fs');
 const { autoUpdater } = require('electron-updater');
 
 const DEFAULT_MODEL = 'openrouter/auto';
+const DEFAULT_API_BASE_URL = 'https://openrouter.ai/api/v1';
 const SETTINGS_FILE = 'settings.json';
 
 function settingsPath() {
   return path.join(app.getPath('userData'), SETTINGS_FILE);
+}
+
+function normalizeApiBaseUrl(value = DEFAULT_API_BASE_URL) {
+  let parsed;
+  try { parsed = new URL(String(value).trim().replace(/\/+$/, '')); } catch { throw new Error('Укажите корректный адрес API OpenRouter.'); }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'openrouter.ai' || parsed.port || parsed.pathname !== '/api/v1' || parsed.search || parsed.hash) {
+    throw new Error('Адрес должен быть https://openrouter.ai/api/v1.');
+  }
+  return parsed.origin + parsed.pathname;
 }
 
 function readSettings() {
@@ -19,6 +29,7 @@ function readSettings() {
   }
   return {
     apiKey,
+    apiBaseUrl: (() => { try { return normalizeApiBaseUrl(stored.apiBaseUrl || DEFAULT_API_BASE_URL); } catch { return DEFAULT_API_BASE_URL; } })(),
     model: typeof stored.model === 'string' ? stored.model : DEFAULT_MODEL,
     transcriptionModel: typeof stored.transcriptionModel === 'string' ? stored.transcriptionModel : 'openai/whisper-1'
   };
@@ -39,7 +50,8 @@ function assertTrustedSender(event) {
 async function openRouterRequest(endpoint, body) {
   const { apiKey } = readSettings();
   if (!apiKey) throw new Error('Добавьте API-ключ OpenRouter в настройках приложения.');
-  const response = await fetch(`https://openrouter.ai/api/v1/${endpoint}`, {
+  const { apiBaseUrl } = readSettings();
+  const response = await fetch(`${apiBaseUrl}/${endpoint}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -116,7 +128,7 @@ app.whenReady().then(() => {
   ipcMain.handle('settings:get', event => {
     assertTrustedSender(event);
     const settings = readSettings();
-    return { apiKeyConfigured: Boolean(settings.apiKey), model: settings.model, transcriptionModel: settings.transcriptionModel };
+    return { apiKeyConfigured: Boolean(settings.apiKey), apiBaseUrl: settings.apiBaseUrl, model: settings.model, transcriptionModel: settings.transcriptionModel };
   });
 
   ipcMain.handle('settings:save', (event, values = {}) => {
@@ -124,6 +136,7 @@ app.whenReady().then(() => {
     const current = readSettings();
     const model = String(values.model || DEFAULT_MODEL).trim();
     const transcriptionModel = String(values.transcriptionModel || 'openai/whisper-1').trim();
+    const apiBaseUrl = normalizeApiBaseUrl(values.apiBaseUrl || DEFAULT_API_BASE_URL);
     if (!/^[\w.-]+\/[\w.:+-]+$/.test(model)) throw new Error('Укажите модель в формате provider/model.');
     if (!/^[\w.-]+\/[\w.:+-]+$/.test(transcriptionModel)) throw new Error('Неверное название модели распознавания.');
     let encryptedApiKey = '';
@@ -136,8 +149,8 @@ app.whenReady().then(() => {
       const previous = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
       encryptedApiKey = previous.encryptedApiKey;
     }
-    writeSettings({ encryptedApiKey, model, transcriptionModel });
-    return { apiKeyConfigured: Boolean(encryptedApiKey), model, transcriptionModel };
+    writeSettings({ encryptedApiKey, apiBaseUrl, model, transcriptionModel });
+    return { apiKeyConfigured: Boolean(encryptedApiKey), apiBaseUrl, model, transcriptionModel };
   });
 
   ipcMain.handle('ai:chat', async (event, values = {}) => {
