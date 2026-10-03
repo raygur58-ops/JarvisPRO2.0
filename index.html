@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#061b43" />
+  <meta name="theme-color" content="#101216" />
   <title>Jarvis Pro — by Sergio</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -13,7 +13,6 @@
     <header class="titlebar">
       <a class="wordmark" href="#" aria-label="Jarvis Pro, на главную">JARVIS <span>PRO</span></a>
       <div class="window-actions">
-        <button class="window-btn maximize" id="maximize" aria-label="Развернуть окно"><span></span></button>
         <button class="window-btn minimize" id="minimize" aria-label="Свернуть окно"><span></span></button>
         <button class="window-btn close" id="close" aria-label="Закрыть окно"><span></span></button>
       </div>
@@ -43,15 +42,17 @@
           <p class="welcome-hint">Я рядом, чтобы помочь с любой задачей</p>
         </div>
       </div>
+      <div class="history-popover" id="historyPopover" hidden></div>
       <form class="composer" id="composer">
         <textarea id="prompt" rows="1" placeholder="Чем могу помочь сегодня?" aria-label="Введите сообщение"></textarea>
         <div class="composer-toolbar">
           <div class="toolbar-left">
-            <label class="icon-button attach" title="Прикрепить файл"><input id="fileInput" type="file" hidden /><svg viewBox="0 0 24 24"><path d="M12 20.5a8.5 8.5 0 1 0-8.5-8.5M12 4v8l5 3"/><path d="M3.5 12H8"/></svg></label>
-            <span class="file-name" id="fileName"></span>
+            <button class="icon-button history-button" id="historyButton" type="button" title="История чатов" aria-label="История чатов"><svg viewBox="0 0 24 24"><path d="M3.5 11a8.5 8.5 0 1 1 2.1 5.6"/><path d="M3.5 5.5V11h5.5M12 7v5l3.4 2"/></svg></button>
+            <button class="icon-button code-button" id="codeButton" type="button" title="Режим кода" aria-label="Режим кода" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m8 5-7 7 7 7M16 5l7 7-7 7"/></svg></button>
           </div>
           <div class="toolbar-right">
             <button class="icon-button mic" id="mic" type="button" title="Голосовой ввод"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8"/></svg></button>
+            <button class="voice-button" id="voiceMode" type="button" title="Голосовой режим" aria-label="Голосовой режим" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 9v6m4-10v14m4-17v20m4-16v12m4-9v6"/></svg></button>
             <button class="send-button" id="send" type="submit" title="Отправить" aria-label="Отправить сообщение"><svg viewBox="0 0 24 24"><path d="m5 12 14-7-4 14-3.5-5L5 12Z"/><path d="m11.5 14 4.5-6"/></svg></button>
           </div>
         </div>

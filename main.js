@@ -24,8 +24,8 @@ function createWindow() {
   const window = new BrowserWindow({
     width: 1180,
     height: 700,
-    minWidth: 760,
-    minHeight: 540,
+    resizable: false,
+    maximizable: false,
     frame: false,
     title: 'Jarvis Pro by Sergio',
     backgroundColor: '#00000000',
@@ -44,11 +44,6 @@ function createWindow() {
 
 app.whenReady().then(() => {
   ipcMain.on('window:minimize', event => BrowserWindow.fromWebContents(event.sender)?.minimize());
-  ipcMain.on('window:toggle-maximize', event => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) return;
-    window.isMaximized() ? window.unmaximize() : window.maximize();
-  });
   ipcMain.on('updates:install', () => autoUpdater.quitAndInstall());
   ipcMain.on('window:close', event => BrowserWindow.fromWebContents(event.sender)?.close());
   createWindow();
